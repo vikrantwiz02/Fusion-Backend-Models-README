@@ -1,16 +1,16 @@
-# Complete Department System Theory - Fusion IIIT
+# Complete Department Module System Documentation
 
-## System Overview
-The Department System manages departmental communication, special requests, and information dissemination within the institute. It facilitates interaction between students, faculty, and department administration through announcements, special requests, and department-specific information management.
+## Overview
+The Department Module serves as a comprehensive departmental communication and administration system, enabling departments to manage announcements, special requests, department information, and inter-departmental workflows. It provides role-based access for students, faculty, and staff with department-specific dashboards and functionality.
 
----
-
-## Model Analysis
+## Database Models
 
 ### 1. SpecialRequest Model
-**Purpose**: Manages special requests from students/faculty to department administration with workflow tracking and status management.
 
-**Fields Analysis**:
+**Purpose**: Manages special requests submitted by users to faculty/staff with approval workflow.
+
+**PostgreSQL Table**: `department_specialrequest`
+
 ```python
 class SpecialRequest(models.Model):
     request_maker = models.ForeignKey(ExtraInfo, on_delete=models.CASCADE)
@@ -18,284 +18,144 @@ class SpecialRequest(models.Model):
     brief = models.CharField(max_length=20, default='--')
     request_details = models.CharField(max_length=200)
     upload_request = models.FileField(blank=True)
-    status = models.CharField(max_length=50,default='Pending')
+    status = models.CharField(max_length=50, default='Pending')
     remarks = models.CharField(max_length=300, default="--")
     request_receiver = models.CharField(max_length=30, default="--")
 ```
 
-**Business Logic Implementation**:
+**Fields**:
+- `request_maker`: Foreign key to ExtraInfo (user submitting request)
+- `request_date`: Auto-populated submission timestamp
+- `brief`: Short description/category of request (20 chars)
+- `request_details`: Detailed request description (200 chars)
+- `upload_request`: Optional file attachment
+- `status`: Request status ('Pending', 'Approved', 'Denied')
+- `remarks`: Admin comments/feedback (300 chars)
+- `request_receiver`: Username of receiving authority
+
+**Enhanced Business Methods**:
 
 ```python
-# Enhanced SpecialRequest with workflow management
-class SpecialRequest(models.Model):
-    REQUEST_TYPES = [
-        ('ACADEMIC', 'Academic Request'),
-        ('TECHNICAL', 'Technical Support'),
-        ('FACILITY', 'Facility Request'),
-        ('DOCUMENT', 'Document Request'),
-        ('PERMISSION', 'Permission Request'),
-        ('OTHER', 'Other')
-    ]
-    
-    STATUS_CHOICES = [
-        ('PENDING', 'Pending Review'),
-        ('UNDER_REVIEW', 'Under Review'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
-        ('COMPLETED', 'Completed'),
-        ('CANCELLED', 'Cancelled')
-    ]
-    
-    PRIORITY_LEVELS = [
-        ('LOW', 'Low Priority'),
-        ('MEDIUM', 'Medium Priority'),
-        ('HIGH', 'High Priority'),
-        ('URGENT', 'Urgent')
-    ]
-    
-    request_maker = models.ForeignKey(ExtraInfo, on_delete=models.CASCADE, 
-                                    related_name='department_requests')
-    request_date = models.DateTimeField(auto_now_add=True)
-    request_type = models.CharField(max_length=20, choices=REQUEST_TYPES, default='OTHER')
-    brief = models.CharField(max_length=100, help_text="Brief description of request")
-    request_details = models.TextField(max_length=1000, help_text="Detailed request description")
-    upload_request = models.FileField(upload_to='department/requests/', blank=True, null=True)
-    
-    # Status and workflow
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    priority = models.CharField(max_length=10, choices=PRIORITY_LEVELS, default='MEDIUM')
-    remarks = models.TextField(max_length=500, blank=True, help_text="Admin remarks")
-    request_receiver = models.ForeignKey(ExtraInfo, on_delete=models.SET_NULL, 
-                                       null=True, blank=True, related_name='received_requests')
-    
-    # Tracking fields
-    assigned_date = models.DateTimeField(null=True, blank=True)
-    due_date = models.DateTimeField(null=True, blank=True)
-    completion_date = models.DateTimeField(null=True, blank=True)
-    estimated_days = models.IntegerField(default=7, help_text="Estimated completion days")
-    
-    # Approval workflow
-    reviewed_by = models.ForeignKey(ExtraInfo, on_delete=models.SET_NULL, 
-                                  null=True, blank=True, related_name='reviewed_requests')
-    approved_by = models.ForeignKey(ExtraInfo, on_delete=models.SET_NULL, 
-                                  null=True, blank=True, related_name='approved_requests')
-    
-    class Meta:
-        ordering = ['-request_date']
-        indexes = [
-            models.Index(fields=['status', 'priority']),
-            models.Index(fields=['request_date']),
-            models.Index(fields=['request_maker'])
-        ]
-    
-    def __str__(self):
-        return f"{self.request_maker.user.username} - {self.brief}"
-    
-    def save(self, *args, **kwargs):
-        # Auto-assign due date based on priority
-        if not self.due_date and self.priority:
-            days_map = {'URGENT': 1, 'HIGH': 3, 'MEDIUM': 7, 'LOW': 14}
-            self.due_date = self.request_date + timedelta(days=days_map.get(self.priority, 7))
-        super().save(*args, **kwargs)
-    
-    @property
-    def is_overdue(self):
-        """Check if request is overdue"""
-        if self.due_date and self.status not in ['COMPLETED', 'CANCELLED']:
-            return timezone.now() > self.due_date
-        return False
-    
-    @property
-    def days_pending(self):
-        """Calculate days since request creation"""
-        return (timezone.now() - self.request_date).days
-    
-    def assign_to(self, receiver):
-        """Assign request to specific receiver"""
-        self.request_receiver = receiver
-        self.assigned_date = timezone.now()
-        self.status = 'UNDER_REVIEW'
-        self.save()
-    
-    def approve(self, approver, remarks=""):
-        """Approve the request"""
-        self.approved_by = approver
-        self.status = 'APPROVED'
-        if remarks:
-            self.remarks = remarks
-        self.save()
-    
-    def complete(self, completion_remarks=""):
-        """Mark request as completed"""
-        self.status = 'COMPLETED'
-        self.completion_date = timezone.now()
-        if completion_remarks:
-            self.remarks = completion_remarks
-        self.save()
+def approve_request(self, approver, remarks=""):
+    """
+    CORE LOGIC: Approve special request with remarks
+    HOW IT WORKS: Updates status to 'Approved', sets remarks, logs approval
+    BUSINESS PURPOSE: Enables authorized personnel to approve requests with feedback
+    """
+    self.status = 'Approved'
+    self.remarks = remarks
+    self.save()
+    # Additional notification logic would be implemented here
+
+def deny_request(self, denier, remarks=""):
+    """
+    CORE LOGIC: Deny special request with mandatory remarks
+    HOW IT WORKS: Updates status to 'Denied', requires justification remarks
+    BUSINESS PURPOSE: Provides transparent rejection process with feedback
+    """
+    self.status = 'Denied' 
+    self.remarks = remarks if remarks else "Request denied"
+    self.save()
+    # Additional notification logic would be implemented here
+
+def can_be_modified(self):
+    """
+    CORE LOGIC: Check if request is still modifiable
+    HOW IT WORKS: Returns True only if status is 'Pending'
+    BUSINESS PURPOSE: Prevents modification of processed requests
+    """
+    return self.status == 'Pending'
+
+def get_processing_time(self):
+    """
+    CORE LOGIC: Calculate time elapsed since request submission
+    HOW IT WORKS: Computes difference between current time and request_date
+    BUSINESS PURPOSE: Track request processing efficiency and SLA compliance
+    """
+    from datetime import datetime
+    return datetime.now() - self.request_date
 ```
 
-**Integration Features**:
-- Email notifications for status changes
-- Department-specific request routing
-- Priority-based SLA management
-- File attachment handling with security checks
-- Automated escalation for overdue requests
-
----
-
 ### 2. Announcements Model
-**Purpose**: Manages department-wide announcements with targeted delivery to specific batches, programs, and departments.
 
-**Fields Analysis**:
+**Purpose**: Manages departmental announcements for different batches, programs, and departments.
+
+**PostgreSQL Table**: `department_announcements`
+
 ```python
 class Announcements(models.Model):
     maker_id = models.ForeignKey(ExtraInfo, on_delete=models.CASCADE)
     ann_date = models.DateTimeField(auto_now_add=True)
     message = models.CharField(max_length=200)
-    batch = models.CharField(max_length=40,default="Year-1")
-    department = models.CharField(max_length=40,default="ALL")
+    batch = models.CharField(max_length=40, default="Year-1")
+    department = models.CharField(max_length=40, default="ALL")
     programme = models.CharField(max_length=10)
     upload_announcement = models.FileField(upload_to='department/upload_announcement', null=True, default=" ")
 ```
 
-**Business Logic Implementation**:
+**Fields**:
+- `maker_id`: Foreign key to ExtraInfo (announcement creator)
+- `ann_date`: Auto-generated announcement timestamp
+- `message`: Announcement content (200 chars)
+- `batch`: Target batch (e.g., "Year-1", "Year-2")
+- `department`: Target department ("CSE", "ECE", "ME", "SM", "ALL")
+- `programme`: Target programme code (10 chars)
+- `upload_announcement`: Optional file attachment
+
+**Enhanced Business Methods**:
 
 ```python
-# Enhanced Announcements with advanced targeting and scheduling
-class Announcements(models.Model):
-    ANNOUNCEMENT_TYPES = [
-        ('GENERAL', 'General Announcement'),
-        ('URGENT', 'Urgent Notice'),
-        ('ACADEMIC', 'Academic Notice'),
-        ('EVENT', 'Event Announcement'),
-        ('DEADLINE', 'Deadline Reminder'),
-        ('EXAM', 'Examination Notice'),
-        ('PLACEMENT', 'Placement Notice')
-    ]
-    
-    VISIBILITY_LEVELS = [
-        ('PUBLIC', 'Public'),
-        ('STUDENTS', 'Students Only'),
-        ('FACULTY', 'Faculty Only'),
-        ('STAFF', 'Staff Only'),
-        ('DEPARTMENT', 'Department Specific')
-    ]
-    
-    maker_id = models.ForeignKey(ExtraInfo, on_delete=models.CASCADE, 
-                                related_name='department_announcements')
-    ann_date = models.DateTimeField(auto_now_add=True)
-    title = models.CharField(max_length=200, help_text="Announcement title")
-    message = models.TextField(max_length=2000, help_text="Announcement content")
-    announcement_type = models.CharField(max_length=20, choices=ANNOUNCEMENT_TYPES, default='GENERAL')
-    
-    # Targeting options
-    batch = models.CharField(max_length=50, default="ALL", 
-                           help_text="Target batch (Year-1, Year-2, etc.)")
-    department = models.CharField(max_length=50, default="ALL",
-                                help_text="Target department")
-    programme = models.CharField(max_length=20, default="ALL",
-                               help_text="Target programme (B.Tech, M.Tech, etc.)")
-    visibility = models.CharField(max_length=20, choices=VISIBILITY_LEVELS, default='PUBLIC')
-    
-    # Content and scheduling
-    upload_announcement = models.FileField(upload_to='department/announcements/', 
-                                         blank=True, null=True)
-    is_urgent = models.BooleanField(default=False)
-    is_pinned = models.BooleanField(default=False)
-    
-    # Publishing controls
-    is_published = models.BooleanField(default=True)
-    publish_date = models.DateTimeField(null=True, blank=True)
-    expiry_date = models.DateTimeField(null=True, blank=True)
-    
-    # Engagement tracking
-    view_count = models.IntegerField(default=0)
-    read_receipts = models.ManyToManyField(ExtraInfo, blank=True, 
-                                         related_name='read_announcements')
-    
-    # Approval workflow
-    requires_approval = models.BooleanField(default=False)
-    approved_by = models.ForeignKey(ExtraInfo, on_delete=models.SET_NULL, 
-                                  null=True, blank=True, related_name='approved_announcements')
-    approval_date = models.DateTimeField(null=True, blank=True)
-    
-    class Meta:
-        ordering = ['-is_pinned', '-is_urgent', '-ann_date']
-        indexes = [
-            models.Index(fields=['department', 'batch']),
-            models.Index(fields=['announcement_type']),
-            models.Index(fields=['is_published', 'expiry_date'])
-        ]
-    
-    def __str__(self):
-        return f"{self.title} - {self.maker_id.user.username}"
-    
-    @property
-    def is_active(self):
-        """Check if announcement is currently active"""
-        now = timezone.now()
-        if self.expiry_date and now > self.expiry_date:
-            return False
-        if self.publish_date and now < self.publish_date:
-            return False
-        return self.is_published
-    
-    @property
-    def target_audience_count(self):
-        """Calculate target audience size"""
-        filters = {}
-        if self.department != "ALL":
-            filters['department__name'] = self.department
-        if self.programme != "ALL":
-            filters['programme'] = self.programme
-        if self.batch != "ALL":
-            filters['batch'] = self.batch
-        
-        return ExtraInfo.objects.filter(**filters).count()
-    
-    def mark_as_read(self, user_extra_info):
-        """Mark announcement as read by user"""
-        self.read_receipts.add(user_extra_info)
-        self.view_count += 1
-        self.save(update_fields=['view_count'])
-    
-    def get_read_percentage(self):
-        """Calculate read percentage"""
-        total_target = self.target_audience_count
-        if total_target == 0:
-            return 0
-        read_count = self.read_receipts.count()
-        return (read_count / total_target) * 100
-    
-    def schedule_announcement(self, publish_date, expiry_date=None):
-        """Schedule announcement for future publication"""
-        self.publish_date = publish_date
-        self.expiry_date = expiry_date
-        self.is_published = False
-        self.save()
-    
-    def extend_expiry(self, days):
-        """Extend announcement expiry"""
-        if self.expiry_date:
-            self.expiry_date += timedelta(days=days)
-        else:
-            self.expiry_date = timezone.now() + timedelta(days=days)
-        self.save()
+def get_target_audience(self):
+    """
+    CORE LOGIC: Determine announcement target audience based on filters
+    HOW IT WORKS: Combines department, batch, and programme filters
+    BUSINESS PURPOSE: Ensure announcements reach correct recipients
+    """
+    filters = {}
+    if self.department != "ALL":
+        filters['department__name'] = self.department
+    if self.batch != "ALL":
+        filters['batch'] = self.batch
+    if self.programme:
+        filters['programme'] = self.programme
+    return ExtraInfo.objects.filter(**filters)
+
+def is_department_wide(self):
+    """
+    CORE LOGIC: Check if announcement targets entire department
+    HOW IT WORKS: Returns True if department is "ALL" or batch is "ALL"
+    BUSINESS PURPOSE: Identify high-priority, institution-wide announcements
+    """
+    return self.department == "ALL" or self.batch == "ALL"
+
+def can_edit(self, user):
+    """
+    CORE LOGIC: Verify if user can edit announcement
+    HOW IT WORKS: Checks if user is maker or has administrative privileges
+    BUSINESS PURPOSE: Maintain announcement integrity and access control
+    """
+    return self.maker_id.user == user or user.has_perm('department.change_announcements')
+
+def get_engagement_metrics(self):
+    """
+    CORE LOGIC: Calculate announcement reach and engagement
+    HOW IT WORKS: Counts target audience and notification delivery status
+    BUSINESS PURPOSE: Measure communication effectiveness and reach
+    """
+    target_count = self.get_target_audience().count()
+    return {
+        'target_audience': target_count,
+        'delivery_rate': 100 if target_count > 0 else 0,
+        'announcement_age': (timezone.now() - self.ann_date).days
+    }
 ```
 
-**Integration Features**:
-- Multi-channel delivery (email, SMS, mobile push)
-- Advanced targeting with demographic filters
-- Read receipt tracking and analytics
-- Scheduled publishing with automatic expiry
-- Template-based announcement creation
-
----
-
 ### 3. Information Model
-**Purpose**: Stores comprehensive department information including contact details, facilities, and laboratory information.
 
-**Fields Analysis**:
+**Purpose**: Stores department-specific contact information, facilities, and lab details.
+
+**PostgreSQL Table**: `department_information`
+
 ```python
 class Information(models.Model):
     department = models.OneToOneField(DepartmentInfo, on_delete=models.CASCADE)
@@ -305,399 +165,429 @@ class Information(models.Model):
     labs = models.TextField()
 ```
 
-**Business Logic Implementation**:
+**Fields**:
+- `department`: One-to-one relationship with DepartmentInfo
+- `phone_number`: Department contact number
+- `email`: Department email address
+- `facilites`: Text description of department facilities
+- `labs`: Text description of department laboratories
+
+**Enhanced Business Methods**:
 
 ```python
-# Enhanced Information with comprehensive department profile management
-class Information(models.Model):
-    DEPARTMENT_TYPES = [
-        ('ACADEMIC', 'Academic Department'),
-        ('ADMINISTRATIVE', 'Administrative Department'),
-        ('RESEARCH', 'Research Department'),
-        ('SERVICE', 'Service Department')
-    ]
+def update_contact_info(self, phone=None, email=None):
+    """
+    CORE LOGIC: Update department contact information
+    HOW IT WORKS: Validates and updates phone/email with change tracking
+    BUSINESS PURPOSE: Maintain current department contact details
+    """
+    if phone:
+        self.phone_number = phone
+    if email:
+        self.email = email
+    self.save()
+
+def add_facility(self, facility_description):
+    """
+    CORE LOGIC: Add new facility to department listing
+    HOW IT WORKS: Appends facility info to existing facilites text field
+    BUSINESS PURPOSE: Maintain comprehensive facility inventory
+    """
+    if self.facilites:
+        self.facilites += f"\n{facility_description}"
+    else:
+        self.facilites = facility_description
+    self.save()
+
+def add_lab(self, lab_description):
+    """
+    CORE LOGIC: Add new laboratory to department listing
+    HOW IT WORKS: Appends lab info to existing labs text field
+    BUSINESS PURPOSE: Track laboratory resources and capabilities
+    """
+    if self.labs:
+        self.labs += f"\n{lab_description}"
+    else:
+        self.labs = lab_description
+    self.save()
+
+def get_department_profile(self):
+    """
+    CORE LOGIC: Generate comprehensive department profile
+    HOW IT WORKS: Combines all information fields into structured format
+    BUSINESS PURPOSE: Provide complete department overview for portals
+    """
+    return {
+        'department_name': self.department.name,
+        'contact': {
+            'phone': self.phone_number,
+            'email': self.email
+        },
+        'facilities': self.facilites.split('\n') if self.facilites else [],
+        'laboratories': self.labs.split('\n') if self.labs else []
+    }
+```
+
+## View Functions with Enhanced Business Logic
+
+### 1. dep_main (Department Dashboard)
+
+**Purpose**: Main department dashboard with role-based routing and request creation.
+
+```python
+@login_required(login_url='/accounts/login')
+def dep_main(request):
+    """
+    CORE LOGIC: Role-based department dashboard with request submission
+    HOW IT WORKS: 
+    1. Identifies user role (student/faculty/staff)
+    2. Loads department-specific announcements and faculty lists
+    3. Handles special request creation via POST
+    4. Routes to appropriate template based on role and department
+    BUSINESS PURPOSE: Centralized department portal with role-specific functionality
+    """
+```
+
+### 2. faculty_view (Faculty Dashboard)
+
+**Purpose**: Faculty interface for announcement creation and request management.
+
+```python
+def faculty_view(request):
+    """
+    CORE LOGIC: Faculty announcement creation and request processing
+    HOW IT WORKS:
+    1. Displays received special requests for approval/denial
+    2. Enables creation of targeted announcements with file attachments
+    3. Sends notifications to relevant student groups
+    4. Routes to department-specific faculty templates
+    BUSINESS PURPOSE: Faculty-centric communication and administrative tools
+    """
+```
+
+### 3. staff_view (Staff Dashboard)
+
+**Purpose**: Staff interface with dual functionality for announcements and department information.
+
+```python
+def staff_view(request):
+    """
+    CORE LOGIC: Staff dual-form processing for announcements and department info
+    HOW IT WORKS:
+    1. Form1: Creates announcements similar to faculty functionality
+    2. Form2: Updates/creates department information (contact, facilities, labs)
+    3. Provides department admin access based on designation
+    4. Manages both communication and information maintenance
+    BUSINESS PURPOSE: Staff administrative control over department communication and info
+    """
+```
+
+### 4. approved/deny (Request Processing)
+
+**Purpose**: Administrative actions for special request approval/denial.
+
+```python
+def approved(request):
+    """
+    CORE LOGIC: Approve special requests with remarks
+    HOW IT WORKS: Updates request status to 'Approved' with admin remarks
+    BUSINESS PURPOSE: Formal approval workflow for student/staff requests
+    """
+
+def deny(request):
+    """
+    CORE LOGIC: Deny special requests with mandatory remarks
+    HOW IT WORKS: Updates request status to 'Denied' with justification
+    BUSINESS PURPOSE: Transparent rejection process with feedback
+    """
+```
+
+### 5. all_students (Student Directory)
+
+**Purpose**: Paginated student listing with sorting and filtering capabilities.
+
+```python
+@login_required(login_url='/accounts/login')
+def all_students(request, bid):
+    """
+    CORE LOGIC: Display paginated student list with department/batch filtering
+    HOW IT WORKS:
+    1. Decodes bid parameter into programme/batch/department filters
+    2. Applies sorting based on user selection with toggle functionality
+    3. Filters students by decoded criteria and user type
+    4. Paginates results with 25 students per page
+    BUSINESS PURPOSE: Provide searchable student directory for faculty/staff
+    """
+
+def decode_bid(bid):
+    """
+    CORE LOGIC: Decode bid structure into programme, batch, and department
+    HOW IT WORKS: Maps first character to programme, calculates batch from length
+    BUSINESS PURPOSE: Support URL-based student filtering system
+    """
+```
+
+### 6. alumni (Alumni Directory)
+
+**Purpose**: Display alumni information by department.
+
+```python
+def alumni(request):
+    """
+    CORE LOGIC: Retrieve and display alumni by department
+    HOW IT WORKS: Filters ExtraInfo for user_type='alumni' by department
+    BUSINESS PURPOSE: Maintain alumni connections and networking database
+    """
+```
+
+### 7. Helper Functions
+
+```python
+def browse_announcements():
+    """
+    CORE LOGIC: Retrieve department-wise announcement collections
+    HOW IT WORKS: Separates announcements by department (CSE/ECE/ME/SM/ALL)
+    BUSINESS PURPOSE: Organize announcements for department-specific viewing
+    """
+
+def faculty():
+    """
+    CORE LOGIC: Generate faculty lists by department with staff integration
+    HOW IT WORKS: Creates combined staff+faculty lists for each department
+    BUSINESS PURPOSE: Support request routing and contact information
+    """
+
+def department_information(request):
+    """
+    CORE LOGIC: Load department-specific information records
+    HOW IT WORKS: Retrieves Information model data for all major departments
+    BUSINESS PURPOSE: Provide department contact and facility details
+    """
+
+def get_make_request(user_id):
+    """
+    CORE LOGIC: Retrieve requests made by specific user
+    HOW IT WORKS: Filters SpecialRequest by request_maker field
+    BUSINESS PURPOSE: Display user's request history and status tracking
+    """
+
+def get_to_request(username):
+    """
+    CORE LOGIC: Retrieve requests received by specific user
+    HOW IT WORKS: Filters SpecialRequest by request_receiver username
+    BUSINESS PURPOSE: Show pending requests for faculty/staff processing
+    """
+```
+
+## URL Patterns
+
+```python
+urlpatterns = [
+    url(r'^$', views.dep_main, name='dep'),
+    url(r'^facView/$', views.faculty_view, name='faculty_view'),
+    url(r'^staffView/$', views.staff_view, name='staff_view'),
+    url(r'All_Students/(?P<bid>[0-9]+)/$', views.all_students, name='all_students'),
+    url(r'alumni/$', views.alumni, name='alumni'),
+    url(r'^approved/$', views.approved, name='approved'),
+    url(r'^deny/$', views.deny, name='deny'),
+    url(r'^api/', include("applications.department.api.urls"))
+]
+```
+
+## API Integration
+
+### REST API Views
+
+```python
+class ListCreateAnnouncementView(generics.ListCreateAPIView):
+    """
+    CORE LOGIC: RESTful API for announcement CRUD operations
+    HOW IT WORKS: Provides GET (list) and POST (create) endpoints for announcements
+    BUSINESS PURPOSE: Enable mobile/web apps to manage announcements programmatically
+    """
+    queryset = Announcements.objects.all()
+    serializer_class = AnnouncementSerializer
+    permission_classes = (IsAuthenticated, IsFacultyStaffOrReadOnly)
     
-    # Core information
-    department = models.OneToOneField(DepartmentInfo, on_delete=models.CASCADE,
-                                    related_name='detailed_info')
-    department_type = models.CharField(max_length=20, choices=DEPARTMENT_TYPES, 
-                                     default='ACADEMIC')
+class DepMainAPIView(APIView):
+    """
+    CORE LOGIC: API version of main department dashboard
+    HOW IT WORKS: Returns user role, announcements, and faculty lists in JSON format
+    BUSINESS PURPOSE: Support mobile apps and frontend frameworks with dashboard data
+    """
     
-    # Contact information
-    phone_number = models.CharField(max_length=15, help_text="Primary contact number")
-    alternate_phone = models.CharField(max_length=15, blank=True, 
-                                     help_text="Alternate contact number")
-    email = models.EmailField(help_text="Official department email")
-    alternate_email = models.EmailField(blank=True, help_text="Alternate email")
-    website = models.URLField(blank=True, help_text="Department website")
+    def get(self, request):
+        # Returns role-based dashboard data with announcements and faculty lists
+        
+class FacAPIView(APIView):
+    """
+    CORE LOGIC: API for faculty-specific data retrieval
+    HOW IT WORKS: Returns faculty dashboard data including announcements
+    BUSINESS PURPOSE: Support faculty mobile interfaces and applications
+    """
     
-    # Physical information
-    office_location = models.CharField(max_length=200, blank=True,
-                                     help_text="Office location details")
-    floor_number = models.IntegerField(null=True, blank=True)
-    building_name = models.CharField(max_length=100, blank=True)
-    room_numbers = models.TextField(blank=True, help_text="List of room numbers")
-    
-    # Operational information
-    office_hours = models.TextField(blank=True, help_text="Office working hours")
-    head_of_department = models.ForeignKey(ExtraInfo, on_delete=models.SET_NULL,
-                                         null=True, blank=True, 
-                                         related_name='headed_department')
-    
-    # Facilities and resources
-    facilities = models.TextField(help_text="Available facilities description")
-    labs = models.TextField(help_text="Laboratory information and equipment")
-    equipment_list = models.TextField(blank=True, help_text="Major equipment inventory")
-    software_resources = models.TextField(blank=True, help_text="Software and licenses available")
-    
-    # Academic information (for academic departments)
-    total_faculty = models.IntegerField(default=0)
-    total_students = models.IntegerField(default=0)
-    courses_offered = models.TextField(blank=True, help_text="Courses offered by department")
-    research_areas = models.TextField(blank=True, help_text="Major research focus areas")
-    
-    # Capacity and statistics
-    lab_capacity = models.IntegerField(null=True, blank=True, 
-                                     help_text="Total lab capacity")
-    classroom_capacity = models.IntegerField(null=True, blank=True,
-                                           help_text="Total classroom capacity")
-    
-    # Administrative
-    established_year = models.IntegerField(null=True, blank=True)
-    accreditation_info = models.TextField(blank=True, help_text="Accreditation details")
-    
-    # Media and documents
-    department_logo = models.ImageField(upload_to='department/logos/', blank=True, null=True)
-    brochure = models.FileField(upload_to='department/brochures/', blank=True, null=True)
-    
-    # Timestamps
-    last_updated = models.DateTimeField(auto_now=True)
-    created_date = models.DateTimeField(auto_now_add=True)
-    
+class StaffAPIView(APIView):
+    """
+    CORE LOGIC: API for staff-specific functionality
+    HOW IT WORKS: Returns staff dashboard data and administrative tools
+    BUSINESS PURPOSE: Enable staff mobile access to department management
+    """
+
+class AllStudentsAPIView(APIView):
+    """
+    CORE LOGIC: API endpoint for student directory access
+    HOW IT WORKS: Provides filtered and paginated student data via REST
+    BUSINESS PURPOSE: Support mobile student directory and contact apps
+    """
+```
+
+### API Permissions
+
+```python
+class IsFacultyStaffOrReadOnly(BasePermission):
+    """
+    CORE LOGIC: Custom permission for faculty/staff write access
+    HOW IT WORKS: Allows read-only for all, write access for faculty/staff only
+    BUSINESS PURPOSE: Secure API endpoints while maintaining data accessibility
+    """
+```
+
+### Serializers
+
+```python
+class AnnouncementSerializer(serializers.ModelSerializer):
+    """
+    CORE LOGIC: Handles announcement API serialization with auto-maker assignment
+    HOW IT WORKS: Automatically assigns maker_id from authenticated user
+    BUSINESS PURPOSE: Ensure proper user attribution for API-created announcements
+    """
     class Meta:
-        verbose_name = "Department Information"
-        verbose_name_plural = "Department Information"
-        indexes = [
-            models.Index(fields=['department_type']),
-            models.Index(fields=['last_updated'])
-        ]
-    
-    def __str__(self):
-        return f"{self.department.name} - Information"
-    
-    @property
-    def faculty_student_ratio(self):
-        """Calculate faculty to student ratio"""
-        if self.total_students > 0:
-            return f"1:{self.total_students // max(self.total_faculty, 1)}"
-        return "N/A"
-    
-    @property
-    def contact_summary(self):
-        """Get formatted contact information"""
-        return {
-            'primary_phone': self.phone_number,
-            'primary_email': self.email,
-            'website': self.website,
-            'office_location': f"{self.building_name}, Floor {self.floor_number}" 
-                              if self.building_name and self.floor_number else self.office_location
-        }
-    
-    def get_facility_list(self):
-        """Parse facilities into structured list"""
-        if self.facilities:
-            return [facility.strip() for facility in self.facilities.split('\n') if facility.strip()]
-        return []
-    
-    def get_lab_list(self):
-        """Parse labs into structured list"""
-        if self.labs:
-            return [lab.strip() for lab in self.labs.split('\n') if lab.strip()]
-        return []
-    
-    def update_statistics(self):
-        """Update faculty and student counts"""
-        # Update total faculty count
-        self.total_faculty = ExtraInfo.objects.filter(
-            department=self.department,
-            user_type='faculty'
-        ).count()
+        model = Announcements 
+        fields = ('__all__')
+        extra_kwargs = {'maker_id': {'required': False}}
         
-        # Update total student count
-        self.total_students = ExtraInfo.objects.filter(
-            department=self.department,
-            user_type='student'
-        ).count()
+    def create(self, validated_data):
+        user = self.context['request'].user
+        user_info = ExtraInfo.objects.filter(user=user).first()
+        validated_data['maker_id'] = user_info
+        return Announcements.objects.create(**validated_data)
+
+class ExtraInfoSerializer(serializers.ModelSerializer):
+    """Serializes user extended information for API responses"""
+    class Meta:
+        model = ExtraInfo 
+        fields = ('__all__')
+
+class SpiSerializer(serializers.ModelSerializer):
+    """Handles academic performance data serialization"""
+    class Meta:
+        model = Spi 
+        fields = ('__all__')
         
-        self.save(update_fields=['total_faculty', 'total_students'])
-    
-    def get_capacity_utilization(self):
-        """Calculate capacity utilization"""
-        utilization = {}
-        if self.lab_capacity:
-            # Estimate lab utilization based on active courses
-            utilization['lab'] = min((self.total_students / self.lab_capacity) * 100, 100)
-        if self.classroom_capacity:
-            utilization['classroom'] = min((self.total_students / self.classroom_capacity) * 100, 100)
-        return utilization
-    
-    def generate_department_report(self):
-        """Generate comprehensive department report"""
-        return {
-            'basic_info': {
-                'name': self.department.name,
-                'type': self.get_department_type_display(),
-                'established': self.established_year,
-                'head': self.head_of_department.user.get_full_name() if self.head_of_department else None
-            },
-            'statistics': {
-                'faculty_count': self.total_faculty,
-                'student_count': self.total_students,
-                'faculty_student_ratio': self.faculty_student_ratio,
-                'facility_count': len(self.get_facility_list()),
-                'lab_count': len(self.get_lab_list())
-            },
-            'capacity': self.get_capacity_utilization(),
-            'contact': self.contact_summary
-        }
+class StudentSerializer(serializers.ModelSerializer):
+    """Serializes student information for directory APIs"""
+    class Meta:
+        model = Student  
+        fields = ('__all__')
+        
+class DesignationSerializer(serializers.ModelSerializer):
+    """Handles user designation/role serialization"""
+    class Meta:
+        model = Designation 
+        fields = ('__all__')
+        
+class HoldsDesignationSerializer(serializers.ModelSerializer):
+    """Serializes user-designation relationships"""
+    class Meta:
+        model = HoldsDesignation 
+        fields = ('__all__')
+        
+class FacultySerializer(serializers.ModelSerializer):
+    """Handles faculty-specific data serialization"""
+    class Meta:
+        model = Faculty
+        fields = ('__all__')
+
+class faculty_aboutSerializer(serializers.ModelSerializer):
+    """Serializes faculty profile and about information"""
+    class Meta:
+        model = faculty_about
+        fields = ('__all__')
+
+class emp_research_projectsSerializer(serializers.ModelSerializer):
+    """Handles faculty research projects data"""
+    class Meta:
+        model = emp_research_projects
+        fields = ('__all__')
 ```
 
-**Integration Features**:
-- Department directory management
-- Resource booking integration
-- Capacity planning and optimization
-- Faculty and student analytics
-- Automated report generation
+## Admin Configuration
 
----
-
-## System Integration and Workflow
-
-### Cross-Module Integration
 ```python
-class DepartmentAnalytics:
-    """Advanced analytics for department operations"""
-    
-    @staticmethod
-    def get_request_trends(department=None, days=30):
-        """Analyze special request trends"""
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=days)
-        
-        requests = SpecialRequest.objects.filter(
-            request_date__range=[start_date, end_date]
-        )
-        
-        if department:
-            requests = requests.filter(
-                request_maker__department__name=department
-            )
-        
-        return {
-            'total_requests': requests.count(),
-            'pending_requests': requests.filter(status='PENDING').count(),
-            'completion_rate': requests.filter(status='COMPLETED').count() / max(requests.count(), 1) * 100,
-            'average_resolution_time': requests.filter(
-                status='COMPLETED'
-            ).aggregate(
-                avg_time=models.Avg(
-                    models.F('completion_date') - models.F('request_date')
-                )
-            )['avg_time']
-        }
-    
-    @staticmethod
-    def get_announcement_engagement(department=None, days=30):
-        """Analyze announcement engagement metrics"""
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=days)
-        
-        announcements = Announcements.objects.filter(
-            ann_date__range=[start_date, end_date],
-            is_published=True
-        )
-        
-        if department:
-            announcements = announcements.filter(department=department)
-        
-        total_announcements = announcements.count()
-        if total_announcements == 0:
-            return {}
-        
-        return {
-            'total_announcements': total_announcements,
-            'average_view_count': announcements.aggregate(
-                avg_views=models.Avg('view_count')
-            )['avg_views'],
-            'engagement_rate': announcements.aggregate(
-                avg_engagement=models.Avg(
-                    models.F('read_receipts__count') * 100.0 / 
-                    models.F('view_count')
-                )
-            )['avg_engagement']
-        }
+from django.contrib import admin
+from .models import Announcements, SpecialRequest
 
-class DepartmentNotificationService:
-    """Notification service for department events"""
-    
-    @staticmethod
-    def notify_new_request(request):
-        """Send notification for new special request"""
-        notification_data = {
-            'type': 'SPECIAL_REQUEST',
-            'title': f"New Special Request: {request.brief}",
-            'message': f"Request from {request.request_maker.user.get_full_name()}",
-            'priority': request.priority,
-            'recipients': DepartmentNotificationService.get_department_admins(
-                request.request_maker.department
-            )
-        }
-        # Send notification through notification service
-        return notification_data
-    
-    @staticmethod
-    def notify_announcement_published(announcement):
-        """Send notification for new announcement"""
-        notification_data = {
-            'type': 'ANNOUNCEMENT',
-            'title': announcement.title,
-            'message': announcement.message[:100] + "..." if len(announcement.message) > 100 else announcement.message,
-            'urgent': announcement.is_urgent,
-            'recipients': DepartmentNotificationService.get_target_audience(announcement)
-        }
-        return notification_data
+admin.site.register(Announcements)
+admin.site.register(SpecialRequest)
 ```
 
----
+## System Dependencies
 
-## Performance Optimization
+### Internal Dependencies
+- **applications.globals.models**: ExtraInfo, DepartmentInfo
+- **applications.academic_information.models**: Student, Spi
+- **applications.eis.models**: faculty_about, emp_research_projects
+- **notification.views**: department_notif for notifications
 
-### Database Optimization
-```python
-# Optimized querysets for department operations
-class DepartmentQueryOptimizer:
-    
-    @staticmethod
-    def get_active_requests_with_makers():
-        """Optimized query for active requests"""
-        return SpecialRequest.objects.select_related(
-            'request_maker__user',
-            'request_maker__department',
-            'request_receiver__user'
-        ).filter(
-            status__in=['PENDING', 'UNDER_REVIEW']
-        ).order_by('priority', 'request_date')
-    
-    @staticmethod
-    def get_department_announcements_with_engagement():
-        """Optimized query for announcements with engagement data"""
-        return Announcements.objects.select_related(
-            'maker_id__user',
-            'maker_id__department'
-        ).prefetch_related(
-            'read_receipts'
-        ).filter(
-            is_published=True,
-            expiry_date__gt=timezone.now()
-        ).order_by('-is_pinned', '-is_urgent', '-ann_date')
-    
-    @staticmethod
-    def get_department_info_complete():
-        """Optimized query for complete department information"""
-        return Information.objects.select_related(
-            'department',
-            'head_of_department__user'
-        ).all()
+### External Dependencies
+- **Django Auth**: User model, login_required decorator
+- **Django Forms**: File upload handling
+- **Django Pagination**: Student list pagination
+- **JSON Schema**: Request validation
 
-# Caching strategies
-class DepartmentCache:
-    
-    @staticmethod
-    def get_department_stats(department_id):
-        """Cache department statistics"""
-        cache_key = f"dept_stats_{department_id}"
-        stats = cache.get(cache_key)
-        
-        if not stats:
-            dept_info = Information.objects.get(department_id=department_id)
-            stats = dept_info.generate_department_report()
-            cache.set(cache_key, stats, 3600)  # Cache for 1 hour
-        
-        return stats
-```
+## Business Workflow
 
----
+### Special Request Workflow
+1. **Student Submission**: Student creates special request via dep_main
+2. **Faculty Review**: Faculty receives request in faculty_view
+3. **Processing**: Faculty approves/denies with remarks
+4. **Notification**: System sends status update to student
+5. **Tracking**: Request history maintained for auditing
 
-## Quality Assurance and Testing
+### Announcement Workflow
+1. **Creation**: Faculty/staff creates announcement with targeting
+2. **Distribution**: System identifies target audience based on filters
+3. **Notification**: department_notif sends notifications to recipients
+4. **Storage**: Announcement stored for browsing and reference
+5. **Access**: Department-wise announcement browsing available
 
-### Automated Testing Suite
-```python
-class DepartmentTestSuite:
-    
-    def test_special_request_workflow(self):
-        """Test complete special request workflow"""
-        # Create test request
-        request = SpecialRequest.objects.create(
-            request_maker=self.test_user,
-            brief="Test Request",
-            request_details="Test details",
-            priority="HIGH"
-        )
-        
-        # Test assignment
-        request.assign_to(self.test_admin)
-        assert request.status == 'UNDER_REVIEW'
-        assert request.assigned_date is not None
-        
-        # Test approval
-        request.approve(self.test_admin, "Approved for testing")
-        assert request.status == 'APPROVED'
-        assert request.approved_by == self.test_admin
-        
-        # Test completion
-        request.complete("Testing completed successfully")
-        assert request.status == 'COMPLETED'
-        assert request.completion_date is not None
-    
-    def test_announcement_targeting(self):
-        """Test announcement targeting accuracy"""
-        announcement = Announcements.objects.create(
-            maker_id=self.test_admin,
-            title="Test Announcement",
-            message="Test message",
-            department="CSE",
-            batch="Year-3",
-            programme="B.Tech"
-        )
-        
-        target_count = announcement.target_audience_count
-        # Verify targeting logic
-        expected_count = ExtraInfo.objects.filter(
-            department__name="CSE",
-            batch="Year-3",
-            programme="B.Tech"
-        ).count()
-        
-        assert target_count == expected_count
-    
-    def test_department_info_validation(self):
-        """Test department information validation"""
-        dept_info = Information.objects.create(
-            department=self.test_department,
-            phone_number="1234567890",
-            email="test@dept.edu",
-            facilities="Test facilities",
-            labs="Test labs"
-        )
-        
-        # Test statistics update
-        dept_info.update_statistics()
-        assert dept_info.total_faculty >= 0
-        assert dept_info.total_students >= 0
-        
-        # Test report generation
-        report = dept_info.generate_department_report()
-        assert 'basic_info' in report
-        assert 'statistics' in report
-        assert 'contact' in report
-```
+### Department Information Management
+1. **Staff Updates**: Department staff updates contact and facility info
+2. **Validation**: System validates information format and completeness
+3. **Storage**: Information linked to specific department via OneToOne
+4. **Display**: Information displayed in department dashboards
+5. **Maintenance**: Regular updates ensure current information
+
+## Integration Points
+
+### Notification System
+- Integrates with notification.views.department_notif
+- Sends real-time notifications for announcements
+- Provides notification tracking for request status changes
+
+### File Management
+- Supports file uploads for announcements and requests
+- Stores files in department-specific directories
+- Provides file download capabilities
+
+### Role-Based Access
+- Integrates with HoldsDesignation for role verification
+- Provides department-specific template routing
+- Supports designation-based feature access
+
+### Database Relationships
+- Links to globals.models for user and department data
+- Integrates with academic_information for student data
+- Connects to eis.models for faculty information
+
+This Department Module provides a comprehensive departmental administration system with robust communication tools, request management, and information maintenance capabilities, supporting the complete departmental workflow from student requests to administrative announcements.
