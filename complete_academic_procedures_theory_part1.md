@@ -569,5 +569,3 @@ class StudentRegistrationCheck(models.Model):
 ---
 
 This concludes Part 1 of the Academic Procedures documentation covering Registration Management, Branch Change, Course Specialization, Credit Management, and Registration Check systems. 
-
-Should I continue with Part 2 covering Thesis Management, Fee Payment, Teaching Credit, and Marks Management systems?

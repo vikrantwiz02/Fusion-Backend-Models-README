@@ -675,5 +675,3 @@ def announce_course_marks(course_id, announcer):
 ---
 
 This concludes Part 2 of the Academic Procedures documentation covering Thesis Management, Fee Payment, Teaching Credit, and Marks Management systems.
-
-Should I continue with Part 3 covering Due Management, Registration Systems (Initial/Final), Course Replacement, Assistantship, Progress Examinations, and other remaining models?
