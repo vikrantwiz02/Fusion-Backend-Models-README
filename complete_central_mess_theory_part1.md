@@ -1074,5 +1074,3 @@ def get_student_active_requests(student):
 ```
 
 ---
-
-This completes Part 1 of the Central Mess documentation. Would you like me to continue with Part 2 covering the remaining models (Feedback, Mess Meetings, Administrative models, etc.)?
